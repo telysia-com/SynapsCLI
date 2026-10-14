@@ -1,0 +1,31 @@
+# Temporary verification workflow for the macOS port (fork-only branch, not part of the PR).
+name: axel-sidecar-verify
+on:
+  push:
+    branches: [verify/axel-service-macos]
+  workflow_dispatch:
+jobs:
+  sidecar:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: clippy
+      - name: sidecar build + tests
+        working-directory: sidecars/axel-memory-service
+        run: |
+          cargo build --locked
+          cargo test --locked
+      - name: host memory_backend tests (incl. ignored real-service e2e)
+        run: |
+          export TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+          export SYNAPS_AXEL_TEST_BIN="$PWD/sidecars/axel-memory-service/target/debug/synaps-axel-memory-service"
+          cargo test --locked -p synaps-engine --lib memory_backend -- --include-ignored
+      - name: sidecar clippy
+        working-directory: sidecars/axel-memory-service
+        run: cargo clippy --locked --all-targets -- -D warnings
